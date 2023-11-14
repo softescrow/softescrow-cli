@@ -65,7 +65,7 @@ class SoftEscrowApi(object):
         )
         resp.raise_for_status()
 
-        confirmation_url = resp.json()
+        confirmation_url = resp.json()["certificate_url"]
         return confirmation_url
 
     def cancel_upload(self) -> None:
