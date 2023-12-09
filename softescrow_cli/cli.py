@@ -6,8 +6,6 @@ from math import ceil
 
 import requests
 
-from halo import Halo
-
 BASE_URL = "https://portal.softescrow.com/api"
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 DEFAULT_PART_SIZE = 5 * 1024 * 1024
@@ -115,14 +113,9 @@ def cli(ctx, api_key, base_url, debug):
 @click.argument("filepath", type=click.Path(exists=True, dir_okay=False))
 @click.pass_obj
 def upload(api, container_id, filepath):
-    spinner = Halo(
-        text=f"Uploading file {filepath} for Lincoln-Parry SoftEscrow container {container_id}"
-    )
     try:
-        spinner.start()
         confirmation_url = api.upload_file(container_id, filepath)
     except Exception as e:
-        spinner.fail()
         click.echo(f"Could not upload file: {e}")
 
         sys.exit(1)
