@@ -113,15 +113,19 @@ def cli(ctx, api_key, base_url, debug):
 @click.argument("filepath", type=click.Path(exists=True, dir_okay=False))
 @click.pass_obj
 def upload(api, container_id, filepath):
-    try:
-        confirmation_url = api.upload_file(container_id, filepath)
-    except Exception as e:
-        click.echo(f"Could not upload file: {e}")
-
-        sys.exit(1)
+    # try:
+    confirmation_url = api.upload_file(container_id, filepath)
+    #     except Exception as e:
+    #         click.echo(f"Could not upload file: {e}")
+    #
+    #         sys.exit(1)
 
     spinner.succeed(f"Uploaded file successfully!")
 
     click.echo(
         f"Your file has been uploaded successfully. Please visit the following URL to retrieve your deposit certificate:\n{confirmation_url}"
     )
+
+
+if __name__ == "__main__":
+    cli()
