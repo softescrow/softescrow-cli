@@ -8,7 +8,6 @@ import requests
 
 BASE_URL = "https://portal.softescrow.com/api"
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
-DEFAULT_PART_SIZE = 5 * 1024 * 1024
 
 
 class SoftEscrowApi(object):
@@ -19,19 +18,22 @@ class SoftEscrowApi(object):
 
         self.artifact_id = None
 
-    def upload_file(self, container_id: str, filepath: str):
-        num_parts = calculate_parts(filepath)
+    def upload_file(self, container_id: str, filepath: str, part_size: int):
+        num_parts = calculate_parts(filepath, part_size)
         filename = os.path.basename(filepath)
-
-        self.artifact_id = self.initialize_upload(container_id, filename)
-        presigned_urls = self.get_presigned_urls(num_parts)
+        
+        try:
+            self.artifact_id = self.initialize_upload(container_id, filename)
+            presigned_urls = self.get_presigned_urls(num_parts)
+        except requests.HTTPError as e:
+            raise SoftEscrowUserUploadException(f"Could not initialize upload: {e.response.json().get('errors')}")
 
         try:
             parts = upload_parts(filepath, presigned_urls)
             confirmation_url = self.confirm_upload(parts)
-        except:
+        except Exception as e:
             self.cancel_upload()
-            raise SoftEscrowUserUploadException("Could not upload file")
+            raise e
 
         return confirmation_url
 
@@ -77,7 +79,35 @@ class SoftEscrowUserUploadException(Exception):
     pass
 
 
-def calculate_parts(filepath, part_size=DEFAULT_PART_SIZE):
+def calculate_part_size(filepath):
+    file_size = os.stat(filepath).st_size
+
+    allowed_chunk_sizes = [size * 1024**2 for size in range(10, 110, 10)]
+
+    if file_size:
+        for chunk_size in allowed_chunk_sizes:
+            if ceil(file_size / chunk_size) < 10000:
+                break
+        else:
+            max_file_size = chunk_size * 10000
+
+            raise SoftEscrowUserUploadException(
+                "File is too large to upload (size: {}, max: {})".format(
+                    file_size, max_file_size
+                )
+            )
+
+        multipart_chunksize = chunk_size
+    else:
+        # default to 25 mb
+        multipart_chunksize = 25 * 1024**2
+
+    return multipart_chunksize
+
+
+def calculate_parts(filepath, part_size=None):
+    if not part_size:
+        part_size = calculate_part_size(filepath)
     file_size = os.stat(filepath).st_size
     return ceil(file_size / part_size)
 
@@ -111,13 +141,13 @@ def cli(ctx, api_key, base_url, debug):
 @cli.command(help="Upload a ZIP file to a Lincoln-Parry SoftEscrow Container")
 @click.option("--container-id", help="SoftEscrow container ID", required=True)
 @click.argument("filepath", type=click.Path(exists=True, dir_okay=False))
+@click.option("--part-size", type=int, help="Part size for multipart uploads")
 @click.pass_obj
-def upload(api, container_id, filepath):
+def upload(api, container_id, filepath, part_size):
     try:
-        confirmation_url = api.upload_file(container_id, filepath)
+        confirmation_url = api.upload_file(container_id, filepath, part_size)
     except Exception as e:
-        click.echo(f"Could not upload file: {e}")
-
+        click.echo(e)
         sys.exit(1)
 
     click.echo(
